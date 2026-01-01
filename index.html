@@ -67,24 +67,24 @@
 (() => {
   'use strict';
 
-  const BUILD = '2025-12-26-05';
+  const BUILD = '2026-01-01-01';
   const LIFF_ID = '2008677807-KWMkUjoS';
 
-  // ★ここ超重要：LINE Developersで設定した「LIFF Endpoint URL」と同じURL（配下でもOK）にする
-  // 例）https://yourname.github.io/yourrepo/  ← 末尾スラッシュ推奨
+  // LIFFの Endpoint URL（LINE Developersに設定してるやつと同じ“上位パス”にする）
   const ENDPOINT_URL = 'https://tt0301t-dev.github.io/my-liff/';
 
-  // GASのexec（APIとしてだけ使う）
+  // GAS Web App の exec（APIとして使う）
   const EXEC_URL = 'https://script.google.com/macros/s/AKfycbwwPhr6LjgnxsKMzJTUc3mN6HIRHewl24kGh0eLvfKs6UlT2lAbxjxl5ZoASVfs9ydzEQ/exec';
 
   let currentUserId = null;
+  let currentProfile = null;
+
   const $ = (id) => document.getElementById(id);
 
   function setStatus(msg) { $('status').style.display='block'; $('status').textContent = msg; }
   function hideStatus() { $('status').style.display='none'; }
   function flashMsg(msg){ $('msg').textContent = msg; setTimeout(()=> $('msg').textContent='', 2000); }
 
-  // 画面で死因を見える化（LINE内はコンソール見づらいので）
   window.addEventListener('error', (e) => setStatus('JS ERROR: ' + (e?.message || e)));
   window.addEventListener('unhandledrejection', (e) => setStatus('PROMISE ERROR: ' + (e?.reason?.message || e.reason || e)));
 
@@ -127,7 +127,6 @@
 
   async function main(){
     try{
-      // まず「いまどのURLで動いてるか」を必ず出す
       setStatus(
         '起動情報\n' +
         'href: ' + location.href + '\n' +
@@ -135,20 +134,17 @@
         'sdk: ' + (typeof liff !== 'undefined')
       );
 
-      // Endpointと現在URLがズレると init が保証されない（＝止まりやすい） :contentReference[oaicite:4]{index=4}
       if (ENDPOINT_URL && !location.href.startsWith(ENDPOINT_URL)) {
         setStatus(
           '⚠ Endpoint不一致の可能性\n' +
           'current: ' + location.href + '\n' +
           'endpoint: ' + ENDPOINT_URL + '\n\n' +
-          '→ LINE Developers の LIFF Endpoint URL をこのページのURL（または上位パス）に合わせてください。'
+          '→ LINE Developers の LIFF Endpoint URL を github.io のURL（または上位パス）に合わせてください。'
         );
         return;
       }
 
       setStatus('LIFF初期化中…');
-
-      // 外部ブラウザでもログインを自動実行できるオプション :contentReference[oaicite:5]{index=5}
       await Promise.race([
         liff.init({ liffId: LIFF_ID, withLoginOnExternalBrowser: true }),
         timeout(8000)
@@ -156,23 +152,26 @@
 
       setStatus('LIFF init OK\nisInClient=' + liff.isInClient() + '\nisLoggedIn=' + liff.isLoggedIn());
 
-      // 注意：LIFFブラウザ(=LINE内)は init 時にログインが走るので、基本ここで true になる :contentReference[oaicite:6]{index=6}
       if (!liff.isLoggedIn()) {
         if (liff.isInClient()) {
           setStatus('LINE内なのに未ログイン判定です。Endpoint/Scope/公開設定を再確認してください。');
           return;
         }
         setStatus('外部ブラウザ：ログインへ遷移します…');
-        liff.login(); // redirectUriは基本任せる（変に付けるとループしがち）
+        liff.login();
         return;
       }
 
       setStatus('プロフィール取得中…');
-      const profile = await Promise.race([liff.getProfile(), timeout(8000)]);
-      currentUserId = profile.userId;
+      currentProfile = await Promise.race([liff.getProfile(), timeout(8000)]);
+      currentUserId = currentProfile.userId;
 
       setStatus('実績取得中…\nuserId=' + currentUserId);
-      const res = await callApi('getOrCreateUser', { lineUserId: currentUserId });
+      const res = await callApi('getOrCreateUser', {
+        lineUserId: currentUserId,
+        displayName: currentProfile.displayName || '',
+        pictureUrl: currentProfile.pictureUrl || ''
+      });
       onDataLoaded(res);
 
     } catch(e){
@@ -190,7 +189,16 @@
 
     setStatus('登録中…');
     try{
-      const res = await callApi('saveInviter', { lineUserId: currentUserId, code });
+      if (!currentProfile) {
+        currentProfile = await Promise.race([liff.getProfile(), timeout(8000)]);
+      }
+      const res = await callApi('saveInviter', {
+        lineUserId: currentUserId,
+        code,
+        displayName: currentProfile.displayName || '',
+        pictureUrl: currentProfile.pictureUrl || ''
+      });
+
       if (res?.ok) {
         alert(res.message || '登録しました');
         hideStatus();
