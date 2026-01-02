@@ -22,9 +22,11 @@
     .loader { text-align:center; color:#9ca3af; font-size:14px; margin-top:20px; word-break:break-word; white-space:pre-wrap; }
     #inviter-card { display:none; }
     .build { font-size:12px; color:#9ca3af; text-align:right; margin-top:-8px; margin-bottom:8px; }
+
     .list-item { padding:10px 0; border-top:1px solid #e5e7eb; }
     .list-name { font-weight:800; color:#111827; }
     .list-sub { font-size:12px; color:#6b7280; margin-top:2px; }
+    .pill { display:inline-block; font-size:11px; padding:3px 8px; border-radius:999px; background:#f3f4f6; color:#374151; margin-left:6px; }
   </style>
 </head>
 <body>
@@ -55,10 +57,15 @@
     </div>
   </div>
 
-  <!-- ★追加：紹介した人（L1）一覧 -->
   <div class="card">
-    <div class="title">あなたが紹介した人（L1一覧）</div>
-    <div id="inviteesList" class="loader">読み込み中...</div>
+    <div class="title">あなたが紹介した人（L1一覧） <span class="pill" id="l1Count">0</span></div>
+    <div id="l1List" class="loader">読み込み中...</div>
+  </div>
+
+  <div class="card">
+    <div class="title">あなたの紹介の紹介（L2一覧） <span class="pill" id="l2Count">0</span></div>
+    <div style="font-size:12px; color:#6b7280; margin-bottom:8px;">※「誰（L1）が紹介したか」も表示します。</div>
+    <div id="l2List" class="loader">読み込み中...</div>
   </div>
 
   <div class="card" id="inviter-card">
@@ -76,13 +83,9 @@
 (() => {
   'use strict';
 
-  const BUILD = '2026-01-02-01';
+  const BUILD = '2026-01-02-02';
   const LIFF_ID = '2008677807-KWMkUjoS';
-
-  // ★LINE Developersの「LIFF Endpoint URL」と同じ“上位パス”にする
   const ENDPOINT_URL = 'https://tt0301t-dev.github.io/my-liff/';
-
-  // GAS Web App の exec（APIとして使う）
   const EXEC_URL = 'https://script.google.com/macros/s/AKfycbwwPhr6LjgnxsKMzJTUc3mN6HIRHewl24kGh0eLvfKs6UlT2lAbxjxl5ZoASVfs9ydzEQ/exec';
 
   let currentUserId = null;
@@ -99,7 +102,6 @@
 
   const timeout = (ms) => new Promise((_, rej) => setTimeout(() => rej(new Error('timeout ' + ms + 'ms')), ms));
 
-  // JSONPでGASを呼ぶ（CORS回避）
   function callApi(fn, payload) {
     return new Promise((resolve, reject) => {
       const cb = 'cb_' + Date.now() + '_' + Math.random().toString(36).slice(2);
@@ -129,6 +131,45 @@
     return String(s).replace(/[&<>"']/g, (c)=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
   }
 
+  function renderList(elId, list, emptyMsg, isL2){
+    const el = $(elId);
+    if (!list || !list.length) { el.textContent = emptyMsg; return; }
+
+    el.innerHTML = list.map(x => {
+      const name = escapeHtml(x.name || '（未取得）');
+      const sub  = escapeHtml((x.joinedAt || '') + (x.code ? (' / ' + x.code) : ''));
+      const via  = isL2 ? `<div class="list-sub">紹介者：${escapeHtml(x.viaName || '（未取得）')}${x.viaCode ? ' / '+escapeHtml(x.viaCode) : ''}</div>` : '';
+      return `
+        <div class="list-item">
+          <div class="list-name">${name}</div>
+          <div class="list-sub">${sub}</div>
+          ${via}
+        </div>
+      `;
+    }).join('');
+  }
+
+  async function loadTree(){
+    try{
+      $('l1List').textContent = '読み込み中...';
+      $('l2List').textContent = '読み込み中...';
+      const r = await callApi('getInviteTree', { lineUserId: currentUserId });
+      if (!r?.ok) {
+        $('l1List').textContent = '取得失敗: ' + (r?.message || '不明');
+        $('l2List').textContent = '取得失敗: ' + (r?.message || '不明');
+        return;
+      }
+      $('l1Count').textContent = String(r.l1_total ?? (r.l1?.length || 0));
+      $('l2Count').textContent = String(r.l2_total ?? (r.l2?.length || 0));
+
+      renderList('l1List', r.l1, 'まだL1紹介はありません', false);
+      renderList('l2List', r.l2, 'まだL2紹介はありません', true);
+    } catch(e){
+      $('l1List').textContent = '通信エラー: ' + (e?.message || String(e));
+      $('l2List').textContent = '通信エラー: ' + (e?.message || String(e));
+    }
+  }
+
   function onDataLoaded(res){
     if (!res || !res.ok) { setStatus('取得失敗: ' + (res?.message || '不明')); return; }
     hideStatus();
@@ -136,26 +177,6 @@
     $('l1').textContent = (res.l1 ?? '-');
     $('l2').textContent = (res.l2 ?? '-');
     if (!res.invited_by) $('inviter-card').style.display = 'block';
-  }
-
-  async function loadInvitees(){
-    if (!currentUserId) return;
-    try{
-      const r = await callApi('getInvitees', { lineUserId: currentUserId });
-      if (!r?.ok) { $('inviteesList').textContent = '取得失敗: ' + (r?.message || '不明'); return; }
-
-      const list = r.invitees || [];
-      if (!list.length) { $('inviteesList').textContent = 'まだ紹介はありません'; return; }
-
-      $('inviteesList').innerHTML = list.map(x => `
-        <div class="list-item">
-          <div class="list-name">${escapeHtml(x.name || '（未取得）')}</div>
-          <div class="list-sub">${escapeHtml(x.joinedAt || '')} / ${escapeHtml(x.code || '')}</div>
-        </div>
-      `).join('');
-    } catch(e){
-      $('inviteesList').textContent = '通信エラー: ' + (e?.message || String(e));
-    }
   }
 
   async function main(){
@@ -207,7 +228,7 @@
       });
 
       onDataLoaded(res);
-      loadInvitees();
+      loadTree();
 
     } catch(e){
       setStatus('エラー: ' + (e?.message || String(e)));
@@ -239,7 +260,7 @@
         $('inviter-card').style.display = 'none';
         $('l1').textContent = (res.l1 ?? $('l1').textContent);
         $('l2').textContent = (res.l2 ?? $('l2').textContent);
-        loadInvitees(); // ★登録後に一覧更新
+        loadTree();
       } else {
         setStatus('エラー: ' + (res?.message || '不明'));
       }
