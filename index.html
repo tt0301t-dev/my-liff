@@ -22,6 +22,9 @@
     .loader { text-align:center; color:#9ca3af; font-size:14px; margin-top:20px; word-break:break-word; white-space:pre-wrap; }
     #inviter-card { display:none; }
     .build { font-size:12px; color:#9ca3af; text-align:right; margin-top:-8px; margin-bottom:8px; }
+    .list-item { padding:10px 0; border-top:1px solid #e5e7eb; }
+    .list-name { font-weight:800; color:#111827; }
+    .list-sub { font-size:12px; color:#6b7280; margin-top:2px; }
   </style>
 </head>
 <body>
@@ -52,6 +55,12 @@
     </div>
   </div>
 
+  <!-- ★追加：紹介した人（L1）一覧 -->
+  <div class="card">
+    <div class="title">あなたが紹介した人（L1一覧）</div>
+    <div id="inviteesList" class="loader">読み込み中...</div>
+  </div>
+
   <div class="card" id="inviter-card">
     <div class="title">紹介者のコードを入力</div>
     <div style="font-size:12px; color:#6b7280; margin-bottom:8px;">紹介コードを入力すると、招待ツリーに登録されます。</div>
@@ -67,10 +76,10 @@
 (() => {
   'use strict';
 
-  const BUILD = '2026-01-01-01';
+  const BUILD = '2026-01-02-01';
   const LIFF_ID = '2008677807-KWMkUjoS';
 
-  // LIFFの Endpoint URL（LINE Developersに設定してるやつと同じ“上位パス”にする）
+  // ★LINE Developersの「LIFF Endpoint URL」と同じ“上位パス”にする
   const ENDPOINT_URL = 'https://tt0301t-dev.github.io/my-liff/';
 
   // GAS Web App の exec（APIとして使う）
@@ -116,6 +125,10 @@
     });
   }
 
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, (c)=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+  }
+
   function onDataLoaded(res){
     if (!res || !res.ok) { setStatus('取得失敗: ' + (res?.message || '不明')); return; }
     hideStatus();
@@ -123,6 +136,26 @@
     $('l1').textContent = (res.l1 ?? '-');
     $('l2').textContent = (res.l2 ?? '-');
     if (!res.invited_by) $('inviter-card').style.display = 'block';
+  }
+
+  async function loadInvitees(){
+    if (!currentUserId) return;
+    try{
+      const r = await callApi('getInvitees', { lineUserId: currentUserId });
+      if (!r?.ok) { $('inviteesList').textContent = '取得失敗: ' + (r?.message || '不明'); return; }
+
+      const list = r.invitees || [];
+      if (!list.length) { $('inviteesList').textContent = 'まだ紹介はありません'; return; }
+
+      $('inviteesList').innerHTML = list.map(x => `
+        <div class="list-item">
+          <div class="list-name">${escapeHtml(x.name || '（未取得）')}</div>
+          <div class="list-sub">${escapeHtml(x.joinedAt || '')} / ${escapeHtml(x.code || '')}</div>
+        </div>
+      `).join('');
+    } catch(e){
+      $('inviteesList').textContent = '通信エラー: ' + (e?.message || String(e));
+    }
   }
 
   async function main(){
@@ -172,7 +205,9 @@
         displayName: currentProfile.displayName || '',
         pictureUrl: currentProfile.pictureUrl || ''
       });
+
       onDataLoaded(res);
+      loadInvitees();
 
     } catch(e){
       setStatus('エラー: ' + (e?.message || String(e)));
@@ -189,9 +224,8 @@
 
     setStatus('登録中…');
     try{
-      if (!currentProfile) {
-        currentProfile = await Promise.race([liff.getProfile(), timeout(8000)]);
-      }
+      if (!currentProfile) currentProfile = await Promise.race([liff.getProfile(), timeout(8000)]);
+
       const res = await callApi('saveInviter', {
         lineUserId: currentUserId,
         code,
@@ -205,6 +239,7 @@
         $('inviter-card').style.display = 'none';
         $('l1').textContent = (res.l1 ?? $('l1').textContent);
         $('l2').textContent = (res.l2 ?? $('l2').textContent);
+        loadInvitees(); // ★登録後に一覧更新
       } else {
         setStatus('エラー: ' + (res?.message || '不明'));
       }
