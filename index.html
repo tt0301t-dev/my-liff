@@ -33,6 +33,21 @@
 
   <div class="build" id="build"></div>
 
+  <!-- ✅ ここを一番上に移動（未登録ユーザーだけ表示） -->
+  <div class="card" id="inviter-card">
+    <div class="title">紹介者のコードを入力</div>
+    <div style="font-size:12px; color:#6b7280; margin-bottom:8px; font-weight:700;">
+      紹介者から送られた招待コードを入力して下さい
+    </div>
+    <div style="font-size:12px; color:#6b7280; margin-bottom:8px;">
+      紹介コードを入力すると、招待ツリーに登録されます。（※後から変更できません）
+    </div>
+    <input id="invCode" class="code" placeholder="例：HSH..." />
+    <div class="btn-row">
+      <button class="btn-primary" id="btnSubmit">登録する</button>
+    </div>
+  </div>
+
   <div class="card">
     <div class="title">あなたの招待コード</div>
     <input id="myCode" class="code" readonly value="..." />
@@ -68,22 +83,13 @@
     <div id="l2List" class="loader">読み込み中...</div>
   </div>
 
-  <div class="card" id="inviter-card">
-    <div class="title">紹介者のコードを入力</div>
-    <div style="font-size:12px; color:#6b7280; margin-bottom:8px;">紹介コードを入力すると、招待ツリーに登録されます。</div>
-    <input id="invCode" class="code" placeholder="例：HSH..." />
-    <div class="btn-row">
-      <button class="btn-primary" id="btnSubmit">登録する</button>
-    </div>
-  </div>
-
   <div class="loader" id="status">読み込み中...</div>
 
 <script>
 (() => {
   'use strict';
 
-  const BUILD = '2026-01-02-02';
+  const BUILD = '2026-01-02-02'; // ★更新したらここを変えるとキャッシュ判別しやすい
   const LIFF_ID = '2008677807-KWMkUjoS';
   const ENDPOINT_URL = 'https://tt0301t-dev.github.io/my-liff/';
   const EXEC_URL = 'https://script.google.com/macros/s/AKfycbwwPhr6LjgnxsKMzJTUc3mN6HIRHewl24kGh0eLvfKs6UlT2lAbxjxl5ZoASVfs9ydzEQ/exec';
