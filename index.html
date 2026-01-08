@@ -27,27 +27,15 @@
     .list-name { font-weight:800; color:#111827; }
     .list-sub { font-size:12px; color:#6b7280; margin-top:2px; }
     .pill { display:inline-block; font-size:11px; padding:3px 8px; border-radius:999px; background:#f3f4f6; color:#374151; margin-left:6px; }
+    .hint-strong { font-size:12px; color:#4b5563; font-weight:700; margin-bottom:6px; }
+    .hint { font-size:12px; color:#6b7280; margin-bottom:8px; }
   </style>
 </head>
 <body>
 
   <div class="build" id="build"></div>
 
-  <!-- ✅ ここを一番上に移動（未登録ユーザーだけ表示） -->
-  <div class="card" id="inviter-card">
-    <div class="title">紹介者のコードを入力</div>
-    <div style="font-size:12px; color:#6b7280; margin-bottom:8px; font-weight:700;">
-      紹介者から送られた招待コードを入力して下さい
-    </div>
-    <div style="font-size:12px; color:#6b7280; margin-bottom:8px;">
-      紹介コードを入力すると、招待ツリーに登録されます。（※後から変更できません）
-    </div>
-    <input id="invCode" class="code" placeholder="例：HSH..." />
-    <div class="btn-row">
-      <button class="btn-primary" id="btnSubmit">登録する</button>
-    </div>
-  </div>
-
+  <!-- 1) 自分の招待コード -->
   <div class="card">
     <div class="title">あなたの招待コード</div>
     <input id="myCode" class="code" readonly value="..." />
@@ -58,6 +46,18 @@
     <div id="msg"></div>
   </div>
 
+  <!-- 2) 紹介者コード入力欄（★ここを招待コードの直下に移動） -->
+  <div class="card" id="inviter-card">
+    <div class="title">紹介者の招待コードを入力</div>
+    <div class="hint-strong">紹介者から送られた招待コードを入力してください。</div>
+    <div class="hint">紹介コードを入力すると、招待ツリーに登録されます。</div>
+    <input id="invCode" class="code" placeholder="例：HSH..." />
+    <div class="btn-row">
+      <button class="btn-primary" id="btnSubmit">登録する</button>
+    </div>
+  </div>
+
+  <!-- 3) 実績 -->
   <div class="card">
     <div class="title">招待実績</div>
     <div class="stats-row">
@@ -72,11 +72,13 @@
     </div>
   </div>
 
+  <!-- 4) L1一覧 -->
   <div class="card">
     <div class="title">あなたが紹介した人（L1一覧） <span class="pill" id="l1Count">0</span></div>
     <div id="l1List" class="loader">読み込み中...</div>
   </div>
 
+  <!-- 5) L2一覧 -->
   <div class="card">
     <div class="title">あなたの紹介の紹介（L2一覧） <span class="pill" id="l2Count">0</span></div>
     <div style="font-size:12px; color:#6b7280; margin-bottom:8px;">※「誰（L1）が紹介したか」も表示します。</div>
@@ -89,7 +91,7 @@
 (() => {
   'use strict';
 
-  const BUILD = '2026-01-02-02'; // ★更新したらここを変えるとキャッシュ判別しやすい
+  const BUILD = '2026-01-08-01';
   const LIFF_ID = '2008677807-KWMkUjoS';
   const ENDPOINT_URL = 'https://tt0301t-dev.github.io/my-liff/';
   const EXEC_URL = 'https://script.google.com/macros/s/AKfycbwwPhr6LjgnxsKMzJTUc3mN6HIRHewl24kGh0eLvfKs6UlT2lAbxjxl5ZoASVfs9ydzEQ/exec';
@@ -182,7 +184,10 @@
     $('myCode').value = res.my_code || '(no code)';
     $('l1').textContent = (res.l1 ?? '-');
     $('l2').textContent = (res.l2 ?? '-');
+
+    // ★紹介者未登録の人だけ「入力欄」を表示（場所は上に移動済み）
     if (!res.invited_by) $('inviter-card').style.display = 'block';
+    else $('inviter-card').style.display = 'none';
   }
 
   async function main(){
@@ -244,7 +249,7 @@
 
   async function submitInviter(){
     const code = $('invCode').value.trim();
-    if (!code) return alert('コードを入力してください');
+    if (!code) return alert('招待コードを入力してください');
     if (!currentUserId) return alert('ユーザー情報が取れていません');
 
     if (!confirm('紹介コード: ' + code + '\n登録しますか？（後から変更できません）')) return;
